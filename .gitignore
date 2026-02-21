@@ -1,0 +1,2 @@
+echo "old_pushup.venv/" >> .gitignore
+echo "__pycache__/" >> .gitignoregit add .git add .
