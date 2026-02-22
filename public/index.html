@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pushup Tracker Pro</title>
+    <!-- MediaPipe Pose via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --surface-color: #1e293b;
+            --primary-color: #3b82f6;
+            --accent-color: #10b981;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        nav {
+            width: 100%;
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin-top: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+        }
+
+        /* Video / AI Canvas Section */
+        .video-wrapper {
+            position: relative;
+            background: var(--surface-color);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            aspect-ratio: 16/9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        video {
+            display: none;
+            /* Hide native video, only show canvas */
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .overlay-stats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            padding: 1rem 1.5rem;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .rep-count {
+            font-size: 4rem;
+            font-weight: 800;
+            color: var(--accent-color);
+            line-height: 1;
+        }
+
+        .rep-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .status-badge.active {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-color);
+            border-color: rgba(16, 185, 129, 0.5);
+        }
+
+        /* Sidebar: Profile & Leaderboard */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--surface-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .card h3 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+            color: #cbd5e1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .input-group {
+            margin-bottom: 1rem;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.btn-accent {
+            background: var(--accent-color);
+        }
+
+        button.btn-accent:hover {
+            background: #059669;
+        }
+
+        /* Goal Progress Ring */
+        .progress-container {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* Leaderboard List */
+        .leaderboard-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .leaderboard-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .leaderboard-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        .lb-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: background 0.2s;
+        }
+
+        .lb-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+
+        .lb-rank {
+            font-weight: 800;
+            color: var(--text-muted);
+            width: 20px;
+        }
+
+        .lb-name {
+            flex-grow: 1;
+            margin-left: 10px;
+            font-weight: 600;
+        }
+
+        .lb-score {
+            font-weight: 800;
+            color: var(--primary-color);
+        }
+
+        .lb-goal {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-left: 5px;
+        }
+
+        /* Debug Stats */
+        .debug-panel {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            display: none;
+            /* Toggle later if needed */
+        }
+
+        @media (max-width: 900px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav>
+        <h1>PushupTracker Pro</h1>
+        <div id="connectionStatus" style="font-size: 0.85rem; color: var(--text-muted);">
+            Camera connecting...
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Main AI Video Area -->
+        <main>
+            <div class="video-wrapper">
+                <video id="video" playsinline></video>
+                <canvas id="output_canvas"></canvas>
+
+                <div class="status-badge" id="postureStatus">
+                    STAND DETECTED
+                </div>
+
+                <div class="overlay-stats">
+                    <div class="rep-count" id="repCounter">0</div>
+                    <div class="rep-label">Current Set</div>
+                </div>
+            </div>
+
+            <!-- Debug Panel (Translate Python vars here) -->
+            <div class="debug-panel" id="debugPanel" style="display: block;">
+                Angle: <span id="dbgAngle">0</span>° |
+                Dist: <span id="dbgDist">0</span> |
+                Torso Ratio: <span id="dbgTorso">0</span> |
+                State: <span id="dbgState">TOP</span>
+            </div>
+
+            <button id="startStopBtn" style="margin-top: 15px;">Start Camera</button>
+        </main>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+
+            <!-- User Profile & Saving -->
+            <div class="card">
+                <h3>Your Profile</h3>
+                <div class="input-group">
+                    <label>Username</label>
+                    <input type="text" id="usernameInput" placeholder="Enter your name">
+                </div>
+                <div class="input-group">
+                    <label>Daily Goal</label>
+                    <input type="number" id="goalInput" value="100" min="1">
+                </div>
+                <button id="saveProfileBtn" style="margin-bottom: 1rem;">Set Goal</button>
+
+                <div class="progress-container">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                        <span>Today's Progress</span>
+                        <span id="progressText">0 / 100</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+
+                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin: 1.5rem 0;">
+
+                <button id="saveWorkoutBtn" class="btn-accent">Save Current Set</button>
+                <div id="saveMsg"
+                    style="text-align: center; margin-top: 8px; font-size: 0.85rem; color: var(--accent-color); display: none;">
+                    Saved successfully!</div>
+            </div>
+
+            <!-- Leaderboard -->
+            <div class="card">
+                <h3>Leaderboard
+                    <span style="font-size: 0.8rem; font-weight: 400; cursor: pointer;" id="refreshBtn">🔄
+                        Refresh</span>
+                </h3>
+                <ul class="leaderboard-list" id="leaderboardList">
+                    <div style="text-align: center; padding: 20px; color: var(--text-muted);">Loading...</div>
+                </ul>
+            </div>
+
+        </aside>
+    </div>
+
+    <script>
+        // --- 1. Global Variables & State ---
+        const API_URL = '/api'; // Assuming hosted on Vercel same origin
+        let reps = 0;
+        let direction = 0; // 0 = TOP, 1 = BOTTOM
+        let camera = null;
+        let isCameraRunning = false;
+
+        let totalToday = 0; // Fetched from DB
+
+        // DOM Elements
+        const videoElement = document.getElementById('video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const repCounterEl = document.getElementById('repCounter');
+        const postureStatusEl = document.getElementById('postureStatus');
+
+        const usernameInput = document.getElementById('usernameInput');
+        const goalInput = document.getElementById('goalInput');
+
+        // Math Engines (Translated from tracker.py)
+        function calculateAngle(a, b, c) {
+            const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+            let angle = Math.abs(radians * 180.0 / Math.PI);
+            if (angle > 180.0) angle = 360 - angle;
+            return angle;
+        }
+
+        function calculateDistance(p1, p2) {
+            // Using hypotenuse formula
+            return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        }
+
+        // --- 2. MediaPipe Initialization ---
+        const pose = new Pose({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+            }
+        });
+
+        pose.setOptions({
+            modelComplexity: 0, // 0 for faster processing on web
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            smoothSegmentation: false,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        pose.onResults(onResults);
+
+        // --- 3. The Core AI Loop (onResults) ---
+        function onResults(results) {
+            // Setup canvas size to video size
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.poseLandmarks) {
+                // Draw skeleton
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: 'rgba(255,255,255,0.4)', lineWidth: 2 });
+                drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#10b981', lineWidth: 1, radius: 3 });
+
+                const lm = results.poseLandmarks;
+
+                // Extract required points
+                const shoulder = lm[11]; // LEFT_SHOULDER
+                const elbow = lm[13];    // LEFT_ELBOW
+                const wrist = lm[15];    // LEFT_WRIST
+                const hip = lm[23];      // LEFT_HIP
+                const nose = lm[0];      // NOSE
+                const rightShoulder = lm[12]; // RIGHT_SHOULDER
+
+                // Visibility threshold check
+                if (shoulder.visibility > 0.4 && elbow.visibility > 0.4 && wrist.visibility > 0.4) {
+
+                    // The Math
+                    const angle = calculateAngle(shoulder, elbow, wrist);
+                    const noseWristDist = calculateDistance(nose, wrist);
+
+                    let shoulderWidth = calculateDistance(shoulder, rightShoulder);
+                    if (shoulderWidth === 0) shoulderWidth = 0.01; // Avoid div 0
+                    const torsoLength = calculateDistance(shoulder, hip);
+                    const torsoRatio = torsoLength / shoulderWidth;
+
+                    // Update UI Debug
+                    document.getElementById('dbgAngle').innerText = Math.round(angle);
+                    document.getElementById('dbgDist').innerText = noseWristDist.toFixed(2);
+                    document.getElementById('dbgTorso').innerText = torsoRatio.toFixed(2);
+
+                    // Master State Machine
+                    if (torsoRatio < 0.85) {
+                        // In Plank position
+                        postureStatusEl.innerText = "TRACKING...";
+                        postureStatusEl.className = "status-badge active";
+
+                        // Check DOWN state
+                        if (angle <= 80 && noseWristDist < 0.42) {
+                            direction = 1;
+                            document.getElementById('dbgState').innerText = "BOTTOM";
+                        }
+
+                        // Check UP state (Rep complete)
+                        if (angle >= 160 && noseWristDist < 0.75) {
+                            if (direction === 1) {
+                                reps++;
+                                repCounterEl.innerText = reps;
+                                updateProgressUI(); // Update local bar temporarily 
+                                direction = 0;
+                            }
+                            document.getElementById('dbgState').innerText = "TOP";
+                        }
+                    } else {
+                        // Standing up
+                        direction = 0;
+                        postureStatusEl.innerText = "STAND DETECTED";
+                        postureStatusEl.className = "status-badge";
+                        document.getElementById('dbgState').innerText = "STAND";
+                    }
+                } else {
+                    postureStatusEl.innerText = "OUT OF FRAME";
+                    postureStatusEl.className = "status-badge";
+                }
+            }
+            canvasCtx.restore();
+        }
+
+        // --- 4. Camera Controls ---
+        document.getElementById('startStopBtn').addEventListener('click', () => {
+            if (!isCameraRunning) {
+                camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await pose.send({ image: videoElement });
+                    },
+                    width: 640,
+                    height: 480
+                });
+                camera.start()
+                    .then(() => {
+                        document.getElementById('connectionStatus').innerText = "Camera Active";
+                        document.getElementById('startStopBtn').innerText = "Stop Camera";
+                        isCameraRunning = true;
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        alert("Please allow camera access.");
+                    });
+            } else {
+                camera.stop();
+                isCameraRunning = false;
+                document.getElementById('startStopBtn').innerText = "Start Camera";
+                document.getElementById('connectionStatus').innerText = "Camera Stopped";
+                // Clear Canvas
+                canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            }
+        });
+
+        // --- 5. Backend Logic ---
+
+        // Local UI updates
+        function updateProgressUI() {
+            const goal = parseInt(goalInput.value) || 100;
+            const currentTotal = totalToday + reps; // History + current unsaved set
+
+            document.getElementById('progressText').innerText = `${currentTotal} / ${goal}`;
+
+            let percentage = (currentTotal / goal) * 100;
+            if (percentage > 100) percentage = 100;
+
+            document.getElementById('progressFill').style.width = `${percentage}%`;
+        }
+
+        // Set Goal Profile
+        document.getElementById('saveProfileBtn').addEventListener('click', async () => {
+            const username = usernameInput.value.trim();
+            const dailyGoal = parseInt(goalInput.value);
+
+            if (!username) return alert("Please enter a username!");
+
+            try {
+                const res = await fetch(`${API_URL}/update_goal`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, daily_goal: dailyGoal })
+                });
+
+                if (res.ok) {
+                    alert(`Goal set to ${dailyGoal} for ${username}`);
+                    updateProgressUI();
+                    await fetchLeaderboard();
+                } else {
+                    const err = await res.json();
+                    alert(`Error: ${err.error}`);
+                }
+            } catch (e) {
+                console.error("Profile save error:", e);
+                alert("Failed to reach server.");
+            }
+        });
+
+        // Save Workout Log
+        document.getElementById('saveWorkoutBtn').addEventListener('click', async () => {
+            const username = usernameInput.value.trim();
+            if (!username) return alert("Please enter a username in your profile first!");
+            if (reps === 0) return alert("Do some pushups first!");
+
+            const btn = document.getElementById('saveWorkoutBtn');
+            btn.innerText = "Saving...";
+            const currentRepsToSave = reps;
+
+            try {
+                const res = await fetch(`${API_URL}/save_workout`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, reps: currentRepsToSave })
+                });
+
+                if (res.ok) {
+                    totalToday += currentRepsToSave;
+                    reps = 0;
+                    repCounterEl.innerText = "0";
+
+                    btn.innerText = "Save Current Set";
+                    const msg = document.getElementById('saveMsg');
+                    msg.style.display = "block";
+                    setTimeout(() => msg.style.display = "none", 3000);
+
+                    updateProgressUI();
+                    await fetchLeaderboard();
+                } else {
+                    const err = await res.json();
+                    alert(`Error: ${err.error}`);
+                    btn.innerText = "Save Current Set";
+                }
+            } catch (e) {
+                console.error("Save error:", e);
+                alert("Failed to reach server.");
+                btn.innerText = "Save Current Set";
+            }
+        });
+
+        // Fetch Leaderboard
+        async function fetchLeaderboard() {
+            const list = document.getElementById('leaderboardList');
+            list.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-muted);">Loading...</div>`;
+
+            try {
+                const res = await fetch(`${API_URL}/get_leaderboard`);
+                if (!res.ok) throw new Error("Failed to fetch leaderboard");
+
+                const { data } = await res.json();
+
+                list.innerHTML = "";
+                if (data.length === 0) {
+                    list.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-muted);">No workouts today yet.</div>`;
+                    return;
+                }
+
+                data.forEach((user, index) => {
+                    const li = document.createElement('li');
+                    li.className = "lb-item";
+                    li.innerHTML = `
+                        <span class="lb-rank">#${index + 1}</span>
+                        <span class="lb-name">${user.username} <span class="lb-goal">tgt: ${user.daily_goal}</span></span>
+                        <span class="lb-score">${user.total_reps}</span>
+                    `;
+                    list.appendChild(li);
+                });
+            } catch (err) {
+                console.error(err);
+                list.innerHTML = `<div style="text-align: center; padding: 20px; color: #ef4444;">Error loading leaderboard. Database not connected yet?</div>`;
+            }
+        }
+
+        document.getElementById('refreshBtn').addEventListener('click', fetchLeaderboard);
+
+        // Init UI on load
+        fetchLeaderboard();
+        updateProgressUI();
+
+    </script>
+</body>
+
+</html>
